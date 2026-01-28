@@ -1,4 +1,4 @@
-import { put, list } from "@vercel/blob";
+import { put, head, BlobNotFoundError } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -19,17 +19,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // List all blobs and find our data file
-    const { blobs } = await list();
-    console.log("All blobs:", blobs.map(b => ({ pathname: b.pathname, url: b.url })));
-
-    const seatingBlob = blobs.find((b) => b.pathname === BLOB_NAME || b.pathname.includes("seating-data"));
-    console.log("Found seating blob:", seatingBlob?.pathname);
-
-    if (!seatingBlob) {
-      console.log("No seating blob found, returning null");
-      return NextResponse.json({ data: null });
-    }
+    const seatingBlob = await head(BLOB_NAME);
 
     // Fetch the blob content
     const response = await fetch(`${seatingBlob.url}?t=${Date.now()}`, { cache: "no-store" });
@@ -41,6 +31,10 @@ export async function GET(request: NextRequest) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
+    if (error instanceof BlobNotFoundError) {
+      console.log("No seating blob found, returning null");
+      return NextResponse.json({ data: null }, { headers: { "Cache-Control": "no-store" } });
+    }
     console.error("Error loading seating data:", error);
     return NextResponse.json({ error: "Failed to load data" }, { status: 500 });
   }
