@@ -136,7 +136,6 @@ export default function Home() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveRetryNonce, setSaveRetryNonce] = useState(0);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
-  const isDirtyRef = useRef(false); // Only save when user makes changes
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [tables, setTables] = useState<TableData[]>(DEFAULT_TABLES);
@@ -185,18 +184,14 @@ export default function Home() {
     }
   }, []);
 
-  // Debounced save effect - only save when user has made changes
+  // Debounced save effect
   useEffect(() => {
-    if (!isAuthenticated || !isDirtyRef.current) return;
+    if (!isAuthenticated) return;
 
     const timeoutId = setTimeout(() => {
       const attemptSave = async () => {
         const ok = await saveToApi({ tables, unassigned, removed, customGuests }, password);
-        if (ok) {
-          isDirtyRef.current = false;
-          return;
-        }
-        isDirtyRef.current = true;
+        if (ok) return;
         if (!retryTimeoutRef.current) {
           retryTimeoutRef.current = setTimeout(() => {
             retryTimeoutRef.current = null;
@@ -287,8 +282,6 @@ export default function Home() {
     const effectiveCapacity = tableId === "bridal" ? table.capacity - BRIDAL_PARTY.length : table.capacity;
     if (table.guests.length >= effectiveCapacity) return;
 
-    isDirtyRef.current = true;
-
     // Remove from source
     if (dragSource === "unassigned") {
       setUnassigned((prev) => prev.filter((id) => id !== draggedGuest));
@@ -317,8 +310,6 @@ export default function Home() {
     e.preventDefault();
     if (!draggedGuest || dragSource === "unassigned") return;
 
-    isDirtyRef.current = true;
-
     // Remove from source table
     if (dragSource) {
       setTables((prev) =>
@@ -341,8 +332,6 @@ export default function Home() {
     const table = tables.find((t) => t.id === tableId);
     if (!table || table.guests.length === 0) return;
 
-    isDirtyRef.current = true;
-
     // Move all guests back to unassigned
     setUnassigned((prev) => [...prev, ...table.guests]);
     setTables((prev) =>
@@ -359,8 +348,6 @@ export default function Home() {
     const lastName = parts.slice(1).join(" ") || "";
     const id = `custom-${Date.now()}`;
 
-    isDirtyRef.current = true;
-
     const newGuest: Guest = { id, firstName, lastName };
     setCustomGuests((prev) => [...prev, newGuest]);
     setUnassigned((prev) => [...prev, id]);
@@ -368,16 +355,12 @@ export default function Home() {
   }
 
   function handleRemoveGuest(guestId: string) {
-    isDirtyRef.current = true;
-
     // Remove from unassigned and add to removed
     setUnassigned((prev) => prev.filter((id) => id !== guestId));
     setRemoved((prev) => [...prev, guestId]);
   }
 
   function handleRestoreGuest(guestId: string) {
-    isDirtyRef.current = true;
-
     // Remove from removed and add back to unassigned
     setRemoved((prev) => prev.filter((id) => id !== guestId));
     setUnassigned((prev) => [...prev, guestId]);
@@ -385,7 +368,6 @@ export default function Home() {
 
   function handleReset() {
     if (confirm("Reset all seating arrangements? This cannot be undone.")) {
-      isDirtyRef.current = true;
       setTables(DEFAULT_TABLES.map((t) => ({ ...t, guests: [] })));
       setUnassigned([...ALL_GUESTS.map((g) => g.id), ...customGuests.map((g) => g.id)]);
       setRemoved([]);
