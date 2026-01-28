@@ -20,7 +20,7 @@ This is a Next.js 16 app (App Router) with React 19 and Tailwind CSS 4. A weddin
 
 ### Data Model
 
-All state is client-side via localStorage with key `table-picker:v1`:
+State is stored server-side in Vercel Blob. The client loads and saves via `/api/seating`.
 - `tables` - Array of table objects with guest assignments
 - `unassigned` - Array of guest IDs not yet seated
 - `removed` - Array of guest IDs that have been removed (can be restored)
@@ -43,14 +43,20 @@ All state is client-side via localStorage with key `table-picker:v1`:
 - Restore removed guests
 - All lists sorted by: Lastname, Firstname
 - Display format: "Lastname, Firstname"
-- localStorage persistence
+- server-side persistence via Vercel Blob
 
 ### Guest List
 
 73 original guests hardcoded in `ALL_GUESTS` array. Users can add custom guests which get IDs prefixed with `custom-`.
 
+## Environment
+
+Required on Vercel:
+- `BLOB_READ_WRITE_TOKEN`
+- `APP_PASSWORD` (defaults to `wedding2025` if not set)
+
 ## Deployment
 
-- GitHub: https://github.com/matthendrix/table-picker
-- Vercel: https://table-picker-ashen.vercel.app/
+- GitHub: `https://github.com/matthendrix/table-picker`
+- Vercel: `https://table-picker-ashen.vercel.app/`
 - Push to master triggers auto-deploy
