@@ -18,6 +18,8 @@ type TableData = {
 type SeatingState = {
   tables: TableData[];
   unassigned: string[]; // guest IDs
+  removed: string[]; // guest IDs that have been removed
+  customGuests: Guest[]; // guests added by the user
 };
 
 const STORAGE_KEY = "table-picker:v1";
@@ -128,7 +130,12 @@ function loadState(): SeatingState | null {
       };
     });
 
-    return { tables, unassigned: saved.unassigned };
+    return {
+      tables,
+      unassigned: saved.unassigned,
+      removed: saved.removed ?? [],
+      customGuests: saved.customGuests ?? [],
+    };
   } catch {
     return null;
   }
@@ -142,27 +149,39 @@ function saveState(state: SeatingState) {
   }
 }
 
+let customGuestsCache: Guest[] = [];
+
 function getGuestById(id: string): Guest | undefined {
-  return ALL_GUESTS.find((g) => g.id === id);
+  return ALL_GUESTS.find((g) => g.id === id) ?? customGuestsCache.find((g) => g.id === id);
 }
 
 export default function Home() {
   const [tables, setTables] = useState<TableData[]>(DEFAULT_TABLES);
   const [unassigned, setUnassigned] = useState<string[]>(ALL_GUESTS.map((g) => g.id));
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [customGuests, setCustomGuests] = useState<Guest[]>([]);
   const [draggedGuest, setDraggedGuest] = useState<string | null>(null);
   const [dragSource, setDragSource] = useState<string | null>(null);
+  const [newGuestName, setNewGuestName] = useState("");
+
+  // Keep the cache in sync for getGuestById
+  useEffect(() => {
+    customGuestsCache = customGuests;
+  }, [customGuests]);
 
   useEffect(() => {
     const saved = loadState();
     if (saved) {
       setTables(saved.tables);
       setUnassigned(saved.unassigned);
+      setRemoved(saved.removed);
+      setCustomGuests(saved.customGuests);
     }
   }, []);
 
   useEffect(() => {
-    saveState({ tables, unassigned });
-  }, [tables, unassigned]);
+    saveState({ tables, unassigned, removed, customGuests });
+  }, [tables, unassigned, removed, customGuests]);
 
   function handleDragStart(e: DragEvent, guestId: string, source: string) {
     setDraggedGuest(guestId);
@@ -242,14 +261,43 @@ export default function Home() {
     );
   }
 
+  function handleAddGuest() {
+    const name = newGuestName.trim();
+    if (!name) return;
+
+    const parts = name.split(" ");
+    const firstName = parts[0];
+    const lastName = parts.slice(1).join(" ") || "";
+    const id = `custom-${Date.now()}`;
+
+    const newGuest: Guest = { id, firstName, lastName };
+    setCustomGuests((prev) => [...prev, newGuest]);
+    setUnassigned((prev) => [...prev, id]);
+    setNewGuestName("");
+  }
+
+  function handleRemoveGuest(guestId: string) {
+    // Remove from unassigned and add to removed
+    setUnassigned((prev) => prev.filter((id) => id !== guestId));
+    setRemoved((prev) => [...prev, guestId]);
+  }
+
+  function handleRestoreGuest(guestId: string) {
+    // Remove from removed and add back to unassigned
+    setRemoved((prev) => prev.filter((id) => id !== guestId));
+    setUnassigned((prev) => [...prev, guestId]);
+  }
+
   function handleReset() {
     if (confirm("Reset all seating arrangements? This cannot be undone.")) {
       setTables(DEFAULT_TABLES.map((t) => ({ ...t, guests: [] })));
-      setUnassigned(ALL_GUESTS.map((g) => g.id));
+      setUnassigned([...ALL_GUESTS.map((g) => g.id), ...customGuests.map((g) => g.id)]);
+      setRemoved([]);
     }
   }
 
-  const assignedCount = ALL_GUESTS.length - unassigned.length;
+  const totalGuests = ALL_GUESTS.length + customGuests.length - removed.length;
+  const assignedCount = totalGuests - unassigned.length;
 
   return (
     <main className="min-h-screen flex">
@@ -264,7 +312,27 @@ export default function Home() {
           <p className="text-sm text-neutral-400 mt-1">11 April</p>
           <div className="mt-3 text-sm">
             <span className="text-emerald-400">{assignedCount}</span>
-            <span className="text-neutral-500"> / {ALL_GUESTS.length} seated</span>
+            <span className="text-neutral-500"> / {totalGuests} seated</span>
+          </div>
+        </div>
+
+        {/* Add Guest Input */}
+        <div className="p-3 border-b border-neutral-700">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newGuestName}
+              onChange={(e) => setNewGuestName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAddGuest()}
+              placeholder="Add guest..."
+              className="flex-1 px-2 py-1.5 text-sm bg-neutral-800 border border-neutral-600 rounded-lg focus:outline-none focus:border-neutral-500"
+            />
+            <button
+              onClick={handleAddGuest}
+              className="px-3 py-1.5 text-sm bg-neutral-700 hover:bg-neutral-600 rounded-lg transition-colors"
+            >
+              Add
+            </button>
           </div>
         </div>
 
@@ -282,23 +350,79 @@ export default function Home() {
             </p>
           ) : (
             <ul className="space-y-1">
-              {unassigned.map((guestId) => {
-                const guest = getGuestById(guestId);
-                if (!guest) return null;
-                return (
+              {unassigned
+                .map((guestId) => getGuestById(guestId))
+                .filter((guest): guest is Guest => guest !== undefined)
+                .sort((a, b) => {
+                  const lastNameCompare = a.lastName.localeCompare(b.lastName);
+                  if (lastNameCompare !== 0) return lastNameCompare;
+                  return a.firstName.localeCompare(b.firstName);
+                })
+                .map((guest) => (
                   <li
                     key={guest.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, guest.id, "unassigned")}
-                    className="px-3 py-2 bg-neutral-800 rounded-lg cursor-grab active:cursor-grabbing hover:bg-neutral-700 transition-colors text-sm"
+                    className="flex items-center justify-between px-3 py-2 bg-neutral-800 rounded-lg cursor-grab active:cursor-grabbing hover:bg-neutral-700 transition-colors text-sm group"
                   >
-                    {guest.firstName} {guest.lastName}
+                    <span>{guest.lastName}, {guest.firstName}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveGuest(guest.id);
+                      }}
+                      className="text-neutral-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                      title="Remove guest"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
                   </li>
-                );
-              })}
+                ))}
             </ul>
           )}
         </div>
+
+        {/* Removed Guests Section */}
+        {removed.length > 0 && (
+          <div className="border-t border-neutral-700">
+            <div className="p-3 border-b border-neutral-700">
+              <h2 className="text-sm font-medium text-neutral-500">
+                Removed ({removed.length})
+              </h2>
+            </div>
+            <div className="max-h-40 overflow-y-auto p-2">
+              <ul className="space-y-1">
+                {removed
+                  .map((guestId) => getGuestById(guestId))
+                  .filter((guest): guest is Guest => guest !== undefined)
+                  .sort((a, b) => {
+                    const lastNameCompare = a.lastName.localeCompare(b.lastName);
+                    if (lastNameCompare !== 0) return lastNameCompare;
+                    return a.firstName.localeCompare(b.firstName);
+                  })
+                  .map((guest) => (
+                    <li
+                      key={guest.id}
+                      className="flex items-center justify-between px-3 py-2 bg-neutral-800/50 rounded-lg text-sm text-neutral-500"
+                    >
+                      <span className="line-through">{guest.lastName}, {guest.firstName}</span>
+                      <button
+                        onClick={() => handleRestoreGuest(guest.id)}
+                        className="text-neutral-500 hover:text-emerald-400 transition-colors"
+                        title="Restore guest"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          </div>
+        )}
 
         <div className="p-3 border-t border-neutral-700">
           <button
@@ -451,10 +575,15 @@ function TableCard({
         {table.guests.length === 0 && !highlight ? (
           <p className="text-xs text-neutral-500 italic">Drop guests here</p>
         ) : (
-          table.guests.map((guestId) => {
-            const guest = getGuestById(guestId);
-            if (!guest) return null;
-            return (
+          table.guests
+            .map((guestId) => getGuestById(guestId))
+            .filter((guest): guest is Guest => guest !== undefined)
+            .sort((a, b) => {
+              const lastNameCompare = a.lastName.localeCompare(b.lastName);
+              if (lastNameCompare !== 0) return lastNameCompare;
+              return a.firstName.localeCompare(b.firstName);
+            })
+            .map((guest) => (
               <div
                 key={guest.id}
                 draggable
@@ -465,10 +594,9 @@ function TableCard({
                     : "bg-neutral-700 hover:bg-neutral-600"
                 }`}
               >
-                {guest.firstName} {guest.lastName}
+                {guest.lastName}, {guest.firstName}
               </div>
-            );
-          })
+            ))
         )}
       </div>
     </div>
