@@ -114,8 +114,9 @@ const DEFAULT_TABLES: TableData[] = [
 ];
 
 function mergeWithDefaults(saved: SeatingState): SeatingState {
+  const savedTables = saved.tables ?? [];
   const tables = DEFAULT_TABLES.map((defaultTable) => {
-    const savedTable = saved.tables.find((t) => t.id === defaultTable.id);
+    const savedTable = savedTables.find((t) => t.id === defaultTable.id);
     return {
       ...defaultTable,
       guests: savedTable?.guests ?? [],
@@ -237,7 +238,8 @@ export default function Home() {
     } catch (error) {
       console.error("Failed to load:", error);
       hasLoadedRef.current = false;
-      setIsAuthenticated(true);
+      setIsAuthenticated(false);
+      setPasswordError("Failed to load data");
       setSaveError(null);
     } finally {
       setIsLoading(false);
