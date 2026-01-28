@@ -1,10 +1,10 @@
-import { put, head, BlobNotFoundError } from "@vercel/blob";
+import { put, list } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const BLOB_NAME = "seating-data.json";
+const BLOB_PREFIX = "seating-data-";
 const APP_PASSWORD = process.env.APP_PASSWORD || "wedding2025";
 
 function checkPassword(request: NextRequest): boolean {
@@ -19,10 +19,24 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const seatingBlob = await head(BLOB_NAME);
+    let latestBlob = null;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { blobs } = await list({ prefix: BLOB_PREFIX });
+      if (blobs.length > 0) {
+        latestBlob = blobs.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime())[0];
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+    }
+
+    if (!latestBlob) {
+      console.log("No seating blob found, returning null");
+      return NextResponse.json({ data: null }, { headers: { "Cache-Control": "no-store" } });
+    }
 
     // Fetch the blob content
-    const response = await fetch(`${seatingBlob.url}?t=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch(`${latestBlob.url}?t=${Date.now()}`, { cache: "no-store" });
     const data = await response.json();
     console.log("Loaded data successfully");
 
@@ -31,10 +45,6 @@ export async function GET(request: NextRequest) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
-    if (error instanceof BlobNotFoundError) {
-      console.log("No seating blob found, returning null");
-      return NextResponse.json({ data: null }, { headers: { "Cache-Control": "no-store" } });
-    }
     console.error("Error loading seating data:", error);
     return NextResponse.json({ error: "Failed to load data" }, { status: 500 });
   }
@@ -51,11 +61,12 @@ export async function POST(request: NextRequest) {
     console.log("Saving seating data...");
 
     // Save new data (overwrite existing file)
-    const blob = await put(BLOB_NAME, JSON.stringify(data), {
+    const blobName = `${BLOB_PREFIX}${Date.now()}.json`;
+    const blob = await put(blobName, JSON.stringify(data), {
       access: "public",
       contentType: "application/json",
       addRandomSuffix: false,
-      allowOverwrite: true,
+      allowOverwrite: false,
     });
 
     console.log("Saved blob:", blob.pathname, blob.url);
