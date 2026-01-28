@@ -42,7 +42,6 @@ const ALL_GUESTS: Guest[] = [
   { id: "17", firstName: "Joan", lastName: "Marquez" },
   { id: "18", firstName: "Jimmy", lastName: "Marquez" },
   { id: "19", firstName: "Skye", lastName: "Marquez" },
-  { id: "20", firstName: "Rachel", lastName: "Yenn Xin" },
   { id: "21", firstName: "Nestor", lastName: "Agtina" },
   { id: "22", firstName: "Gie", lastName: "Canuto-Agtina" },
   { id: "23", firstName: "Sam", lastName: "Haber" },
@@ -67,9 +66,7 @@ const ALL_GUESTS: Guest[] = [
   { id: "42", firstName: "William", lastName: "Webb" },
   { id: "43", firstName: "Samuel", lastName: "Webb" },
   { id: "44", firstName: "Jessica", lastName: "Heikkinen" },
-  { id: "45", firstName: "Matt", lastName: "Heikkinen" },
   { id: "46", firstName: "Hugo", lastName: "Heikkinen" },
-  { id: "47", firstName: "Matt", lastName: "Burroughs" },
   { id: "48", firstName: "Shane", lastName: "Styles" },
   { id: "49", firstName: "Belinda", lastName: "Styles" },
   { id: "50", firstName: "Daniel", lastName: "Mclean" },
@@ -99,7 +96,10 @@ const ALL_GUESTS: Guest[] = [
 ];
 
 // Bride and groom - always on bridal table, not draggable
-const BRIDAL_PARTY = ["Matt", "Rachel"];
+const BRIDAL_PARTY: Guest[] = [
+  { id: "bridal-matt", firstName: "Matt", lastName: "Heikkinen" },
+  { id: "bridal-rachel", firstName: "Rachel", lastName: "Yenn Xin" },
+];
 
 const DEFAULT_TABLES: TableData[] = [
   { id: "bridal", name: "Bridal Table", capacity: 2, guests: [] },
@@ -225,9 +225,18 @@ export default function Home() {
 
       if (data) {
         const merged = mergeWithDefaults(data);
-        setTables(merged.tables);
-        setUnassigned(merged.unassigned);
-        setRemoved(merged.removed);
+        const knownIds = new Set([
+          ...ALL_GUESTS.map((g) => g.id),
+          ...merged.customGuests.map((g) => g.id),
+        ]);
+        setTables(
+          merged.tables.map((t) => ({
+            ...t,
+            guests: t.guests.filter((id) => knownIds.has(id)),
+          }))
+        );
+        setUnassigned(merged.unassigned.filter((id) => knownIds.has(id)));
+        setRemoved(merged.removed.filter((id) => knownIds.has(id)));
         setCustomGuests(merged.customGuests);
       }
 
@@ -410,7 +419,7 @@ export default function Home() {
     );
   }
 
-  const totalGuests = ALL_GUESTS.length + customGuests.length - removed.length;
+  const totalGuests = ALL_GUESTS.length + BRIDAL_PARTY.length + customGuests.length - removed.length;
   const assignedCount = totalGuests - unassigned.length;
 
   return (
@@ -689,12 +698,12 @@ function TableCard({
       {/* Guest List */}
       <div className="min-h-[180px] space-y-1">
         {/* Bride and Groom - fixed on bridal table */}
-        {highlight && BRIDAL_PARTY.map((name) => (
+        {highlight && BRIDAL_PARTY.map((guest) => (
           <div
-            key={name}
+            key={guest.id}
             className="px-2 py-1 rounded text-xs bg-rose-700 text-rose-100 font-medium"
           >
-            {name}
+            {guest.firstName}
           </div>
         ))}
         {table.guests.length === 0 && !highlight ? (

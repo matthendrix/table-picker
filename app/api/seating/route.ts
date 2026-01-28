@@ -1,10 +1,11 @@
-import { put, list } from "@vercel/blob";
+import { put, list, del } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const BLOB_PREFIX = "seating-data-";
+const MAX_BLOBS_TO_KEEP = 20;
 const APP_PASSWORD = process.env.APP_PASSWORD || "wedding2025";
 
 function checkPassword(request: NextRequest): boolean {
@@ -68,6 +69,18 @@ export async function POST(request: NextRequest) {
       addRandomSuffix: false,
       allowOverwrite: false,
     });
+
+    try {
+      const { blobs } = await list({ prefix: BLOB_PREFIX });
+      if (blobs.length > MAX_BLOBS_TO_KEEP) {
+        const stale = blobs
+          .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime())
+          .slice(MAX_BLOBS_TO_KEEP);
+        await del(stale.map((b) => b.url));
+      }
+    } catch (cleanupError) {
+      console.warn("Blob cleanup failed:", cleanupError);
+    }
 
     console.log("Saved blob:", blob.pathname, blob.url);
     return NextResponse.json({ success: true, url: blob.url });
