@@ -127,16 +127,10 @@ function mergeWithDefaults(saved: SeatingState): SeatingState {
 
   return {
     tables,
-    unassigned: saved.unassigned,
+    unassigned: saved.unassigned ?? [],
     removed: saved.removed ?? [],
     customGuests: saved.customGuests ?? [],
   };
-}
-
-let customGuestsCache: Guest[] = [];
-
-function getGuestById(id: string): Guest | undefined {
-  return ALL_GUESTS.find((g) => g.id === id) ?? customGuestsCache.find((g) => g.id === id);
 }
 
 export default function Home() {
@@ -145,8 +139,7 @@ export default function Home() {
   const [passwordError, setPasswordError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasLoadedData, setHasLoadedData] = useState(false);
-  const saveCountRef = useRef(0); // Track saves to skip the first one after load
+  const isDirtyRef = useRef(false); // Only save when user makes changes
 
   const [tables, setTables] = useState<TableData[]>(DEFAULT_TABLES);
   const [unassigned, setUnassigned] = useState<string[]>(ALL_GUESTS.map((g) => g.id));
@@ -156,10 +149,10 @@ export default function Home() {
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [newGuestName, setNewGuestName] = useState("");
 
-  // Keep the cache in sync for getGuestById
-  useEffect(() => {
-    customGuestsCache = customGuests;
-  }, [customGuests]);
+  const getGuestById = useCallback(
+    (id: string) => ALL_GUESTS.find((g) => g.id === id) ?? customGuests.find((g) => g.id === id),
+    [customGuests]
+  );
 
   // Check for saved password on mount
   useEffect(() => {
@@ -193,23 +186,17 @@ export default function Home() {
     }
   }, []);
 
-  // Debounced save effect - only save after initial data has loaded AND user makes changes
+  // Debounced save effect - only save when user has made changes
   useEffect(() => {
-    if (!isAuthenticated || !hasLoadedData) return;
-
-    // Skip the first save trigger right after loading (it's just the loaded data)
-    saveCountRef.current++;
-    if (saveCountRef.current === 1) {
-      console.log("Skipping initial save after load");
-      return;
-    }
+    if (!isAuthenticated || !isDirtyRef.current) return;
 
     const timeoutId = setTimeout(() => {
       saveToApi({ tables, unassigned, removed, customGuests }, password);
+      isDirtyRef.current = false;
     }, 1000);
 
     return () => clearTimeout(timeoutId);
-  }, [tables, unassigned, removed, customGuests, isAuthenticated, hasLoadedData, password, saveToApi]);
+  }, [tables, unassigned, removed, customGuests, isAuthenticated, password, saveToApi]);
 
   async function loadData(pwd: string) {
     setIsLoading(true);
@@ -247,9 +234,7 @@ export default function Home() {
       }
 
       localStorage.setItem(PASSWORD_KEY, pwd);
-      saveCountRef.current = 0; // Reset save counter after load
       setIsAuthenticated(true);
-      setHasLoadedData(true);
       setPasswordError("");
     } catch (error) {
       console.error("Failed to load:", error);
@@ -263,9 +248,7 @@ export default function Home() {
         setRemoved(merged.removed);
         setCustomGuests(merged.customGuests);
       }
-      saveCountRef.current = 0; // Reset save counter after load
       setIsAuthenticated(true);
-      setHasLoadedData(true);
     } finally {
       setIsLoading(false);
     }
@@ -302,6 +285,8 @@ export default function Home() {
     const effectiveCapacity = tableId === "bridal" ? table.capacity - BRIDAL_PARTY.length : table.capacity;
     if (table.guests.length >= effectiveCapacity) return;
 
+    isDirtyRef.current = true;
+
     // Remove from source
     if (dragSource === "unassigned") {
       setUnassigned((prev) => prev.filter((id) => id !== draggedGuest));
@@ -330,6 +315,8 @@ export default function Home() {
     e.preventDefault();
     if (!draggedGuest || dragSource === "unassigned") return;
 
+    isDirtyRef.current = true;
+
     // Remove from source table
     if (dragSource) {
       setTables((prev) =>
@@ -352,6 +339,8 @@ export default function Home() {
     const table = tables.find((t) => t.id === tableId);
     if (!table || table.guests.length === 0) return;
 
+    isDirtyRef.current = true;
+
     // Move all guests back to unassigned
     setUnassigned((prev) => [...prev, ...table.guests]);
     setTables((prev) =>
@@ -368,6 +357,8 @@ export default function Home() {
     const lastName = parts.slice(1).join(" ") || "";
     const id = `custom-${Date.now()}`;
 
+    isDirtyRef.current = true;
+
     const newGuest: Guest = { id, firstName, lastName };
     setCustomGuests((prev) => [...prev, newGuest]);
     setUnassigned((prev) => [...prev, id]);
@@ -375,12 +366,16 @@ export default function Home() {
   }
 
   function handleRemoveGuest(guestId: string) {
+    isDirtyRef.current = true;
+
     // Remove from unassigned and add to removed
     setUnassigned((prev) => prev.filter((id) => id !== guestId));
     setRemoved((prev) => [...prev, guestId]);
   }
 
   function handleRestoreGuest(guestId: string) {
+    isDirtyRef.current = true;
+
     // Remove from removed and add back to unassigned
     setRemoved((prev) => prev.filter((id) => id !== guestId));
     setUnassigned((prev) => [...prev, guestId]);
@@ -388,6 +383,7 @@ export default function Home() {
 
   function handleReset() {
     if (confirm("Reset all seating arrangements? This cannot be undone.")) {
+      isDirtyRef.current = true;
       setTables(DEFAULT_TABLES.map((t) => ({ ...t, guests: [] })));
       setUnassigned([...ALL_GUESTS.map((g) => g.id), ...customGuests.map((g) => g.id)]);
       setRemoved([]);
@@ -598,6 +594,7 @@ export default function Home() {
             onDrop={(e) => handleDropOnTable(e, "bridal")}
             onDragStart={handleDragStart}
             onClearTable={() => handleClearTable("bridal")}
+            resolveGuest={getGuestById}
             highlight
           />
         </div>
@@ -616,6 +613,7 @@ export default function Home() {
                   onDrop={(e) => handleDropOnTable(e, id)}
                   onDragStart={handleDragStart}
                   onClearTable={() => handleClearTable(id)}
+                  resolveGuest={getGuestById}
                 />
               );
             })}
@@ -633,6 +631,7 @@ export default function Home() {
                   onDrop={(e) => handleDropOnTable(e, id)}
                   onDragStart={handleDragStart}
                   onClearTable={() => handleClearTable(id)}
+                  resolveGuest={getGuestById}
                 />
               );
             })}
@@ -649,6 +648,7 @@ function TableCard({
   onDrop,
   onDragStart,
   onClearTable,
+  resolveGuest,
   highlight,
 }: {
   table: TableData;
@@ -656,6 +656,7 @@ function TableCard({
   onDrop: (e: DragEvent) => void;
   onDragStart: (e: DragEvent, guestId: string, source: string) => void;
   onClearTable: () => void;
+  resolveGuest: (id: string) => Guest | undefined;
   highlight?: boolean;
 }) {
   // Bridal table includes Matt & Rachel
@@ -720,7 +721,7 @@ function TableCard({
           <p className="text-xs text-neutral-500 italic">Drop guests here</p>
         ) : (
           table.guests
-            .map((guestId) => getGuestById(guestId))
+            .map((guestId) => resolveGuest(guestId))
             .filter((guest): guest is Guest => guest !== undefined)
             .sort((a, b) => {
               const lastNameCompare = a.lastName.localeCompare(b.lastName);
