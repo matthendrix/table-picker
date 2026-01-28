@@ -1,6 +1,9 @@
 import { put, list } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const BLOB_NAME = "seating-data.json";
 const APP_PASSWORD = process.env.APP_PASSWORD || "wedding2025";
 
@@ -29,11 +32,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch the blob content
-    const response = await fetch(seatingBlob.url);
+    const response = await fetch(`${seatingBlob.url}?t=${Date.now()}`, { cache: "no-store" });
     const data = await response.json();
     console.log("Loaded data successfully");
 
-    return NextResponse.json({ data });
+    return NextResponse.json(
+      { data },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     console.error("Error loading seating data:", error);
     return NextResponse.json({ error: "Failed to load data" }, { status: 500 });
