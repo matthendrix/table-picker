@@ -136,7 +136,10 @@ export default function Home() {
   const [passwordError, setPasswordError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveRetryNonce, setSaveRetryNonce] = useState(0);
   const isDirtyRef = useRef(false); // Only save when user makes changes
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [tables, setTables] = useState<TableData[]>(DEFAULT_TABLES);
   const [unassigned, setUnassigned] = useState<string[]>(ALL_GUESTS.map((g) => g.id));
@@ -159,8 +162,9 @@ export default function Home() {
   // Save to API with debounce
   const saveToApi = useCallback(async (state: SeatingState, pwd: string) => {
     setIsSaving(true);
+    setSaveError(null);
     try {
-      await fetch("/api/seating", {
+      const response = await fetch("/api/seating", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -168,8 +172,15 @@ export default function Home() {
         },
         body: JSON.stringify(state),
       });
+      if (!response.ok) {
+        setSaveError(`Save failed (${response.status})`);
+        return false;
+      }
+      return true;
     } catch (error) {
       console.error("Failed to save:", error);
+      setSaveError("Save failed (network)");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -180,12 +191,25 @@ export default function Home() {
     if (!isAuthenticated || !isDirtyRef.current) return;
 
     const timeoutId = setTimeout(() => {
-      saveToApi({ tables, unassigned, removed, customGuests }, password);
-      isDirtyRef.current = false;
+      const attemptSave = async () => {
+        const ok = await saveToApi({ tables, unassigned, removed, customGuests }, password);
+        if (ok) {
+          isDirtyRef.current = false;
+          return;
+        }
+        isDirtyRef.current = true;
+        if (!retryTimeoutRef.current) {
+          retryTimeoutRef.current = setTimeout(() => {
+            retryTimeoutRef.current = null;
+            setSaveRetryNonce((n) => n + 1);
+          }, 3000);
+        }
+      };
+      void attemptSave();
     }, 1000);
 
     return () => clearTimeout(timeoutId);
-  }, [tables, unassigned, removed, customGuests, isAuthenticated, password, saveToApi]);
+  }, [tables, unassigned, removed, customGuests, isAuthenticated, password, saveToApi, saveRetryNonce]);
 
   async function loadData(pwd: string) {
     setIsLoading(true);
@@ -211,10 +235,12 @@ export default function Home() {
       }
 
       setIsAuthenticated(true);
+      setSaveError(null);
       setPasswordError("");
     } catch (error) {
       console.error("Failed to load:", error);
       setIsAuthenticated(true);
+      setSaveError(null);
     } finally {
       setIsLoading(false);
     }
@@ -411,9 +437,10 @@ export default function Home() {
         <div className="p-4 border-b border-neutral-700">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-semibold">Wedding Seating</h1>
-            {isSaving && (
-              <span className="text-xs text-neutral-500">Saving...</span>
-            )}
+            <div className="text-xs">
+              {isSaving && <span className="text-neutral-500">Saving...</span>}
+              {!isSaving && saveError && <span className="text-red-400">{saveError}</span>}
+            </div>
           </div>
           <p className="text-sm text-neutral-400 mt-1">11 April</p>
           <div className="mt-3 text-sm">
