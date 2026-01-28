@@ -22,9 +22,6 @@ type SeatingState = {
   customGuests: Guest[]; // guests added by the user
 };
 
-const STORAGE_KEY = "table-picker:v1";
-const PASSWORD_KEY = "table-picker:password";
-
 const ALL_GUESTS: Guest[] = [
   { id: "1", firstName: "Ulysis", lastName: "Chomapoy" },
   { id: "2", firstName: "Beatrice", lastName: "Chomapoy" },
@@ -154,15 +151,9 @@ export default function Home() {
     [customGuests]
   );
 
-  // Check for saved password on mount
+  // No localStorage usage; require login each session
   useEffect(() => {
-    const savedPassword = localStorage.getItem(PASSWORD_KEY);
-    if (savedPassword) {
-      setPassword(savedPassword);
-      loadData(savedPassword);
-    } else {
-      setIsLoading(false);
-    }
+    setIsLoading(false);
   }, []);
 
   // Save to API with debounce
@@ -177,8 +168,6 @@ export default function Home() {
         },
         body: JSON.stringify(state),
       });
-      // Also save to localStorage as cache
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (error) {
       console.error("Failed to save:", error);
     } finally {
@@ -208,7 +197,6 @@ export default function Home() {
       if (response.status === 401) {
         setPasswordError("Incorrect password");
         setIsLoading(false);
-        localStorage.removeItem(PASSWORD_KEY);
         return;
       }
 
@@ -220,34 +208,12 @@ export default function Home() {
         setUnassigned(merged.unassigned);
         setRemoved(merged.removed);
         setCustomGuests(merged.customGuests);
-      } else {
-        // No data on server, check localStorage
-        const cached = localStorage.getItem(STORAGE_KEY);
-        if (cached) {
-          const parsed = JSON.parse(cached) as SeatingState;
-          const merged = mergeWithDefaults(parsed);
-          setTables(merged.tables);
-          setUnassigned(merged.unassigned);
-          setRemoved(merged.removed);
-          setCustomGuests(merged.customGuests);
-        }
       }
 
-      localStorage.setItem(PASSWORD_KEY, pwd);
       setIsAuthenticated(true);
       setPasswordError("");
     } catch (error) {
       console.error("Failed to load:", error);
-      // Fall back to localStorage
-      const cached = localStorage.getItem(STORAGE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached) as SeatingState;
-        const merged = mergeWithDefaults(parsed);
-        setTables(merged.tables);
-        setUnassigned(merged.unassigned);
-        setRemoved(merged.removed);
-        setCustomGuests(merged.customGuests);
-      }
       setIsAuthenticated(true);
     } finally {
       setIsLoading(false);
