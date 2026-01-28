@@ -42,7 +42,6 @@ const ALL_GUESTS: Guest[] = [
   { id: "17", firstName: "Joan", lastName: "Marquez" },
   { id: "18", firstName: "Jimmy", lastName: "Marquez" },
   { id: "19", firstName: "Skye", lastName: "Marquez" },
-  { id: "20", firstName: "Rachel", lastName: "Yenn Xin" },
   { id: "21", firstName: "Nestor", lastName: "Agtina" },
   { id: "22", firstName: "Gie", lastName: "Canuto-Agtina" },
   { id: "23", firstName: "Sam", lastName: "Haber" },
@@ -67,9 +66,7 @@ const ALL_GUESTS: Guest[] = [
   { id: "42", firstName: "William", lastName: "Webb" },
   { id: "43", firstName: "Samuel", lastName: "Webb" },
   { id: "44", firstName: "Jessica", lastName: "Heikkinen" },
-  { id: "45", firstName: "Matt", lastName: "Heikkinen" },
   { id: "46", firstName: "Hugo", lastName: "Heikkinen" },
-  { id: "47", firstName: "Matt", lastName: "Burroughs" },
   { id: "48", firstName: "Shane", lastName: "Styles" },
   { id: "49", firstName: "Belinda", lastName: "Styles" },
   { id: "50", firstName: "Daniel", lastName: "Mclean" },
@@ -138,6 +135,7 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveRetryNonce, setSaveRetryNonce] = useState(0);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const isDirtyRef = useRef(false); // Only save when user makes changes
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -176,6 +174,7 @@ export default function Home() {
         setSaveError(`Save failed (${response.status})`);
         return false;
       }
+      setLastSavedAt(new Date());
       return true;
     } catch (error) {
       console.error("Failed to save:", error);
@@ -228,19 +227,30 @@ export default function Home() {
 
       if (data) {
         const merged = mergeWithDefaults(data);
-        setTables(merged.tables);
-        setUnassigned(merged.unassigned);
-        setRemoved(merged.removed);
+        const knownIds = new Set([
+          ...ALL_GUESTS.map((g) => g.id),
+          ...merged.customGuests.map((g) => g.id),
+        ]);
+        setTables(
+          merged.tables.map((t) => ({
+            ...t,
+            guests: t.guests.filter((id) => knownIds.has(id)),
+          }))
+        );
+        setUnassigned(merged.unassigned.filter((id) => knownIds.has(id)));
+        setRemoved(merged.removed.filter((id) => knownIds.has(id)));
         setCustomGuests(merged.customGuests);
       }
 
       setIsAuthenticated(true);
       setSaveError(null);
+      setLastSavedAt(null);
       setPasswordError("");
     } catch (error) {
       console.error("Failed to load:", error);
-      setIsAuthenticated(true);
-      setSaveError(null);
+      setIsAuthenticated(false);
+      setSaveError("Load failed");
+      setPasswordError("Failed to load data");
     } finally {
       setIsLoading(false);
     }
@@ -437,9 +447,12 @@ export default function Home() {
         <div className="p-4 border-b border-neutral-700">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-semibold">Wedding Seating</h1>
-            <div className="text-xs">
+            <div className="text-xs text-right">
               {isSaving && <span className="text-neutral-500">Saving...</span>}
               {!isSaving && saveError && <span className="text-red-400">{saveError}</span>}
+              {!isSaving && !saveError && lastSavedAt && (
+                <span className="text-neutral-500">Saved {lastSavedAt.toLocaleTimeString()}</span>
+              )}
             </div>
           </div>
           <p className="text-sm text-neutral-400 mt-1">11 April</p>
