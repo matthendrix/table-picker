@@ -1,0 +1,476 @@
+"use client";
+
+import { useState, useEffect, DragEvent } from "react";
+
+type Guest = {
+  id: string;
+  firstName: string;
+  lastName: string;
+};
+
+type TableData = {
+  id: string;
+  name: string;
+  capacity: number;
+  guests: string[]; // guest IDs
+};
+
+type SeatingState = {
+  tables: TableData[];
+  unassigned: string[]; // guest IDs
+};
+
+const STORAGE_KEY = "table-picker:v1";
+
+const ALL_GUESTS: Guest[] = [
+  { id: "1", firstName: "Ulysis", lastName: "Chomapoy" },
+  { id: "2", firstName: "Beatrice", lastName: "Chomapoy" },
+  { id: "3", firstName: "Abegail", lastName: "Chomapoy" },
+  { id: "4", firstName: "Ezekiel", lastName: "Chomapoy" },
+  { id: "5", firstName: "Heidi", lastName: "Palaleo" },
+  { id: "6", firstName: "Susan", lastName: "Docyogen" },
+  { id: "7", firstName: "Andres", lastName: "Docyogen" },
+  { id: "8", firstName: "Karen Faith", lastName: "Docyogen" },
+  { id: "9", firstName: "Jahzeel Queen", lastName: "Ban-ang" },
+  { id: "10", firstName: "Roxanne", lastName: "Hernaez" },
+  { id: "11", firstName: "Butrous", lastName: "Kibara" },
+  { id: "12", firstName: "Esther", lastName: "Fang" },
+  { id: "13", firstName: "Angel", lastName: "Calang-ad" },
+  { id: "14", firstName: "Jon", lastName: "Boland" },
+  { id: "15", firstName: "Virginia", lastName: "Boland" },
+  { id: "16", firstName: "Enrico", lastName: "Marquez" },
+  { id: "17", firstName: "Joan", lastName: "Marquez" },
+  { id: "18", firstName: "Jimmy", lastName: "Marquez" },
+  { id: "19", firstName: "Skye", lastName: "Marquez" },
+  { id: "20", firstName: "Rachel", lastName: "Yenn Xin" },
+  { id: "21", firstName: "Nestor", lastName: "Agtina" },
+  { id: "22", firstName: "Gie", lastName: "Canuto-Agtina" },
+  { id: "23", firstName: "Sam", lastName: "Haber" },
+  { id: "24", firstName: "Melchora", lastName: "Chin" },
+  { id: "25", firstName: "Agnes", lastName: "Cibic" },
+  { id: "26", firstName: "Mitchel", lastName: "Chin" },
+  { id: "27", firstName: "Julie", lastName: "Rehbaum" },
+  { id: "28", firstName: "Isabel", lastName: "Hooley" },
+  { id: "29", firstName: "Elvies", lastName: "Dadat" },
+  { id: "30", firstName: "Jannen", lastName: "Beg-asan" },
+  { id: "31", firstName: "Armin", lastName: "Maniago" },
+  { id: "32", firstName: "Reggie", lastName: "Maniago" },
+  { id: "33", firstName: "Michelle", lastName: "Emery" },
+  { id: "34", firstName: "Ruby", lastName: "Emery" },
+  { id: "35", firstName: "Ava", lastName: "Withjoy" },
+  { id: "36", firstName: "Paschience", lastName: "Withjoy" },
+  { id: "37", firstName: "Charlotte", lastName: "Kummer" },
+  { id: "38", firstName: "Mark", lastName: "Webb" },
+  { id: "39", firstName: "Kerry", lastName: "Webb" },
+  { id: "40", firstName: "Luke", lastName: "Webb" },
+  { id: "41", firstName: "Christina", lastName: "Webb" },
+  { id: "42", firstName: "William", lastName: "Webb" },
+  { id: "43", firstName: "Samuel", lastName: "Webb" },
+  { id: "44", firstName: "Jessica", lastName: "Heikkinen" },
+  { id: "45", firstName: "Matt", lastName: "Heikkinen" },
+  { id: "46", firstName: "Hugo", lastName: "Heikkinen" },
+  { id: "47", firstName: "Matt", lastName: "Burroughs" },
+  { id: "48", firstName: "Shane", lastName: "Styles" },
+  { id: "49", firstName: "Belinda", lastName: "Styles" },
+  { id: "50", firstName: "Daniel", lastName: "Mclean" },
+  { id: "51", firstName: "Rhiannon", lastName: "Mclean" },
+  { id: "52", firstName: "Owen", lastName: "Fox" },
+  { id: "53", firstName: "Mira", lastName: "Fox" },
+  { id: "54", firstName: "Tim", lastName: "Hazra" },
+  { id: "55", firstName: "Bec", lastName: "Hazra" },
+  { id: "56", firstName: "Moria", lastName: "Hazra" },
+  { id: "57", firstName: "Marlia", lastName: "Hazra" },
+  { id: "58", firstName: "Graham", lastName: "Reibelt" },
+  { id: "59", firstName: "Ros", lastName: "Reibelt" },
+  { id: "60", firstName: "Robert", lastName: "Schilt" },
+  { id: "61", firstName: "Vel", lastName: "Schilt" },
+  { id: "62", firstName: "Maria", lastName: "Curran" },
+  { id: "63", firstName: "Brian", lastName: "Curran" },
+  { id: "64", firstName: "Ben (Pastor)", lastName: "Lassator" },
+  { id: "65", firstName: "Sharon", lastName: "Lassator" },
+  { id: "66", firstName: "Eli", lastName: "Lassator" },
+  { id: "67", firstName: "Samuel", lastName: "Lassator" },
+  { id: "68", firstName: "Emily", lastName: "Lassator" },
+  { id: "69", firstName: "Billy", lastName: "Almond" },
+  { id: "70", firstName: "Eloise", lastName: "Craig" },
+  { id: "71", firstName: "Dylan", lastName: "Wood" },
+  { id: "72", firstName: "Taylor", lastName: "Simpson" },
+  { id: "73", firstName: "Lisa", lastName: "Whitten" },
+];
+
+// Bride and groom - always on bridal table, not draggable
+const BRIDAL_PARTY = ["Matt", "Rachel"];
+
+const DEFAULT_TABLES: TableData[] = [
+  { id: "bridal", name: "Bridal Table", capacity: 2, guests: [] },
+  { id: "table1", name: "Table 1", capacity: 10, guests: [] },
+  { id: "table2", name: "Table 2", capacity: 10, guests: [] },
+  { id: "table3", name: "Table 3", capacity: 10, guests: [] },
+  { id: "table4", name: "Table 4", capacity: 10, guests: [] },
+  { id: "table5", name: "Table 5", capacity: 10, guests: [] },
+  { id: "table6", name: "Table 6", capacity: 10, guests: [] },
+  { id: "table7", name: "Table 7", capacity: 10, guests: [] },
+  { id: "table8", name: "Table 8", capacity: 10, guests: [] },
+];
+
+function loadState(): SeatingState | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as SeatingState;
+
+    // Merge saved guest assignments with current table definitions (for capacity changes)
+    const tables = DEFAULT_TABLES.map((defaultTable) => {
+      const savedTable = saved.tables.find((t) => t.id === defaultTable.id);
+      return {
+        ...defaultTable,
+        guests: savedTable?.guests ?? [],
+      };
+    });
+
+    return { tables, unassigned: saved.unassigned };
+  } catch {
+    return null;
+  }
+}
+
+function saveState(state: SeatingState) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
+
+function getGuestById(id: string): Guest | undefined {
+  return ALL_GUESTS.find((g) => g.id === id);
+}
+
+export default function Home() {
+  const [tables, setTables] = useState<TableData[]>(DEFAULT_TABLES);
+  const [unassigned, setUnassigned] = useState<string[]>(ALL_GUESTS.map((g) => g.id));
+  const [draggedGuest, setDraggedGuest] = useState<string | null>(null);
+  const [dragSource, setDragSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    const saved = loadState();
+    if (saved) {
+      setTables(saved.tables);
+      setUnassigned(saved.unassigned);
+    }
+  }, []);
+
+  useEffect(() => {
+    saveState({ tables, unassigned });
+  }, [tables, unassigned]);
+
+  function handleDragStart(e: DragEvent, guestId: string, source: string) {
+    setDraggedGuest(guestId);
+    setDragSource(source);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }
+
+  function handleDropOnTable(e: DragEvent, tableId: string) {
+    e.preventDefault();
+    if (!draggedGuest) return;
+
+    const table = tables.find((t) => t.id === tableId);
+    if (!table) return;
+
+    // Check capacity
+    if (table.guests.length >= table.capacity) return;
+
+    // Remove from source
+    if (dragSource === "unassigned") {
+      setUnassigned((prev) => prev.filter((id) => id !== draggedGuest));
+    } else if (dragSource) {
+      setTables((prev) =>
+        prev.map((t) =>
+          t.id === dragSource
+            ? { ...t, guests: t.guests.filter((id) => id !== draggedGuest) }
+            : t
+        )
+      );
+    }
+
+    // Add to table
+    setTables((prev) =>
+      prev.map((t) =>
+        t.id === tableId ? { ...t, guests: [...t.guests, draggedGuest] } : t
+      )
+    );
+
+    setDraggedGuest(null);
+    setDragSource(null);
+  }
+
+  function handleDropOnUnassigned(e: DragEvent) {
+    e.preventDefault();
+    if (!draggedGuest || dragSource === "unassigned") return;
+
+    // Remove from source table
+    if (dragSource) {
+      setTables((prev) =>
+        prev.map((t) =>
+          t.id === dragSource
+            ? { ...t, guests: t.guests.filter((id) => id !== draggedGuest) }
+            : t
+        )
+      );
+    }
+
+    // Add to unassigned
+    setUnassigned((prev) => [...prev, draggedGuest]);
+
+    setDraggedGuest(null);
+    setDragSource(null);
+  }
+
+  function handleClearTable(tableId: string) {
+    const table = tables.find((t) => t.id === tableId);
+    if (!table || table.guests.length === 0) return;
+
+    // Move all guests back to unassigned
+    setUnassigned((prev) => [...prev, ...table.guests]);
+    setTables((prev) =>
+      prev.map((t) => (t.id === tableId ? { ...t, guests: [] } : t))
+    );
+  }
+
+  function handleReset() {
+    if (confirm("Reset all seating arrangements? This cannot be undone.")) {
+      setTables(DEFAULT_TABLES.map((t) => ({ ...t, guests: [] })));
+      setUnassigned(ALL_GUESTS.map((g) => g.id));
+    }
+  }
+
+  const assignedCount = ALL_GUESTS.length - unassigned.length;
+
+  return (
+    <main className="min-h-screen flex">
+      {/* Left Panel - Guest List */}
+      <div
+        className="w-64 bg-neutral-900 border-r border-neutral-700 flex flex-col h-screen flex-shrink-0"
+        onDragOver={handleDragOver}
+        onDrop={handleDropOnUnassigned}
+      >
+        <div className="p-4 border-b border-neutral-700">
+          <h1 className="text-xl font-semibold">Wedding Seating</h1>
+          <p className="text-sm text-neutral-400 mt-1">11 April</p>
+          <div className="mt-3 text-sm">
+            <span className="text-emerald-400">{assignedCount}</span>
+            <span className="text-neutral-500"> / {ALL_GUESTS.length} seated</span>
+          </div>
+        </div>
+
+        <div className="p-3 border-b border-neutral-700">
+          <h2 className="text-sm font-medium text-neutral-400 mb-1">
+            Unassigned ({unassigned.length})
+          </h2>
+          <p className="text-xs text-neutral-500">Drag guests to a table</p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2">
+          {unassigned.length === 0 ? (
+            <p className="text-sm text-neutral-600 text-center py-4">
+              All guests seated!
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {unassigned.map((guestId) => {
+                const guest = getGuestById(guestId);
+                if (!guest) return null;
+                return (
+                  <li
+                    key={guest.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, guest.id, "unassigned")}
+                    className="px-3 py-2 bg-neutral-800 rounded-lg cursor-grab active:cursor-grabbing hover:bg-neutral-700 transition-colors text-sm"
+                  >
+                    {guest.firstName} {guest.lastName}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="p-3 border-t border-neutral-700">
+          <button
+            onClick={handleReset}
+            className="w-full px-3 py-2 text-sm border border-red-800 text-red-400 rounded-lg hover:bg-red-950 transition-colors"
+          >
+            Reset All
+          </button>
+        </div>
+      </div>
+
+      {/* Right Panel - Floor Plan */}
+      <div className="flex-1 p-6 overflow-auto">
+        {/* Stage Area */}
+        <div className="flex justify-center mb-2">
+          <div className="w-72 h-12 bg-neutral-800 rounded-t-full border border-neutral-600 flex items-center justify-center text-neutral-500 text-sm">
+            Stage / Dance Floor
+          </div>
+        </div>
+
+        {/* Stage Rectangle + Bridal Table */}
+        <div className="flex justify-center items-start gap-6 mb-8">
+          <div className="w-72 h-16 bg-neutral-800 border border-neutral-600" />
+
+          {/* Bridal Table */}
+          <TableCard
+            table={tables.find((t) => t.id === "bridal")!}
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDropOnTable(e, "bridal")}
+            onDragStart={handleDragStart}
+            onClearTable={() => handleClearTable("bridal")}
+            highlight
+          />
+        </div>
+
+        {/* Guest Tables - 2 columns like floor plan */}
+        <div className="flex justify-center gap-12">
+          {/* Left Column: Tables 1-4 */}
+          <div className="space-y-4">
+            {["table1", "table2", "table3", "table4"].map((id) => {
+              const table = tables.find((t) => t.id === id)!;
+              return (
+                <TableCard
+                  key={id}
+                  table={table}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDropOnTable(e, id)}
+                  onDragStart={handleDragStart}
+                  onClearTable={() => handleClearTable(id)}
+                />
+              );
+            })}
+          </div>
+
+          {/* Right Column: Tables 5-8 */}
+          <div className="space-y-4">
+            {["table5", "table6", "table7", "table8"].map((id) => {
+              const table = tables.find((t) => t.id === id)!;
+              return (
+                <TableCard
+                  key={id}
+                  table={table}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDropOnTable(e, id)}
+                  onDragStart={handleDragStart}
+                  onClearTable={() => handleClearTable(id)}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function TableCard({
+  table,
+  onDragOver,
+  onDrop,
+  onDragStart,
+  onClearTable,
+  highlight,
+}: {
+  table: TableData;
+  onDragOver: (e: DragEvent) => void;
+  onDrop: (e: DragEvent) => void;
+  onDragStart: (e: DragEvent, guestId: string, source: string) => void;
+  onClearTable: () => void;
+  highlight?: boolean;
+}) {
+  // Bridal table includes Matt & Rachel
+  const totalGuests = highlight ? table.guests.length + BRIDAL_PARTY.length : table.guests.length;
+  const isFull = totalGuests >= table.capacity;
+
+  return (
+    <div
+      className={`rounded-lg border-2 p-3 transition-all ${
+        highlight
+          ? "bg-rose-950 border-rose-600"
+          : isFull
+          ? "bg-emerald-950 border-emerald-700"
+          : "bg-neutral-800 border-neutral-600"
+      }`}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
+        <span className={`text-sm font-medium ${highlight ? "text-rose-200" : ""}`}>
+          {table.name}
+        </span>
+        <div className="flex items-center gap-2">
+          {table.guests.length > 0 && (
+            <button
+              onClick={onClearTable}
+              className="text-neutral-500 hover:text-red-400 transition-colors"
+              title="Clear table"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+          <span
+            className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+              isFull
+                ? "bg-emerald-600 text-white"
+                : totalGuests > 0
+                ? "bg-amber-600 text-white"
+                : "bg-neutral-700 text-neutral-300"
+            }`}
+          >
+            {totalGuests}/{table.capacity}
+          </span>
+        </div>
+      </div>
+
+      {/* Guest List */}
+      <div className="min-h-[180px] space-y-1">
+        {/* Bride and Groom - fixed on bridal table */}
+        {highlight && BRIDAL_PARTY.map((name) => (
+          <div
+            key={name}
+            className="px-2 py-1 rounded text-xs bg-rose-700 text-rose-100 font-medium"
+          >
+            {name}
+          </div>
+        ))}
+        {table.guests.length === 0 && !highlight ? (
+          <p className="text-xs text-neutral-500 italic">Drop guests here</p>
+        ) : (
+          table.guests.map((guestId) => {
+            const guest = getGuestById(guestId);
+            if (!guest) return null;
+            return (
+              <div
+                key={guest.id}
+                draggable
+                onDragStart={(e) => onDragStart(e, guest.id, table.id)}
+                className={`px-2 py-1 rounded text-xs cursor-grab active:cursor-grabbing transition-colors ${
+                  highlight
+                    ? "bg-rose-900 hover:bg-rose-800"
+                    : "bg-neutral-700 hover:bg-neutral-600"
+                }`}
+              >
+                {guest.firstName} {guest.lastName}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
