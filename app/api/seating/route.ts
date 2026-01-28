@@ -18,15 +18,20 @@ export async function GET(request: NextRequest) {
   try {
     // List all blobs and find our data file
     const { blobs } = await list();
+    console.log("All blobs:", blobs.map(b => ({ pathname: b.pathname, url: b.url })));
+
     const seatingBlob = blobs.find((b) => b.pathname === BLOB_NAME || b.pathname.includes("seating-data"));
+    console.log("Found seating blob:", seatingBlob?.pathname);
 
     if (!seatingBlob) {
+      console.log("No seating blob found, returning null");
       return NextResponse.json({ data: null });
     }
 
     // Fetch the blob content
     const response = await fetch(seatingBlob.url);
     const data = await response.json();
+    console.log("Loaded data successfully");
 
     return NextResponse.json({ data });
   } catch (error) {
@@ -43,6 +48,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const data = await request.json();
+    console.log("Saving seating data...");
 
     // Save new data (overwrite existing file)
     const blob = await put(BLOB_NAME, JSON.stringify(data), {
@@ -52,6 +58,7 @@ export async function POST(request: NextRequest) {
       allowOverwrite: true,
     });
 
+    console.log("Saved blob:", blob.pathname, blob.url);
     return NextResponse.json({ success: true, url: blob.url });
   } catch (error) {
     console.error("Error saving seating data:", error);
