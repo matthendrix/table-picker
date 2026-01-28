@@ -111,9 +111,8 @@ const DEFAULT_TABLES: TableData[] = [
 ];
 
 function mergeWithDefaults(saved: SeatingState): SeatingState {
-  const savedTables = saved.tables ?? [];
   const tables = DEFAULT_TABLES.map((defaultTable) => {
-    const savedTable = savedTables.find((t) => t.id === defaultTable.id);
+    const savedTable = saved.tables.find((t) => t.id === defaultTable.id);
     return {
       ...defaultTable,
       guests: savedTable?.guests ?? [],
@@ -132,7 +131,6 @@ export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -216,7 +214,6 @@ export default function Home() {
 
       if (response.status === 401) {
         setPasswordError("Incorrect password");
-        setLoadError(null);
         setIsLoading(false);
         return;
       }
@@ -243,14 +240,12 @@ export default function Home() {
       setIsAuthenticated(true);
       setSaveError(null);
       setLastSavedAt(null);
-      setLoadError(null);
       setPasswordError("");
     } catch (error) {
       console.error("Failed to load:", error);
       setIsAuthenticated(false);
       setSaveError("Load failed");
-      setLoadError("Failed to load data");
-      setPasswordError("");
+      setPasswordError("Failed to load data");
     } finally {
       setIsLoading(false);
     }
@@ -262,7 +257,6 @@ export default function Home() {
       setPasswordError("Please enter a password");
       return;
     }
-    setLoadError(null);
     loadData(password);
   }
 
@@ -409,9 +403,6 @@ export default function Home() {
           {passwordError && (
             <p className="text-red-400 text-sm mb-3">{passwordError}</p>
           )}
-          {loadError && (
-            <p className="text-red-400 text-sm mb-3">{loadError}</p>
-          )}
 
           <button
             type="submit"
@@ -424,7 +415,7 @@ export default function Home() {
     );
   }
 
-  const totalGuests = ALL_GUESTS.length + BRIDAL_PARTY.length + customGuests.length - removed.length;
+  const totalGuests = ALL_GUESTS.length + customGuests.length - removed.length;
   const assignedCount = totalGuests - unassigned.length;
 
   return (
@@ -443,9 +434,6 @@ export default function Home() {
               {!isSaving && saveError && <span className="text-red-400">{saveError}</span>}
               {!isSaving && !saveError && lastSavedAt && (
                 <span className="text-neutral-500">Saved {lastSavedAt.toLocaleTimeString()}</span>
-              )}
-              {!isSaving && !saveError && !lastSavedAt && (
-                <span className="text-neutral-600">Idle</span>
               )}
             </div>
           </div>
