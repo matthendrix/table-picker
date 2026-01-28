@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, DragEvent } from "react";
+import { useState, useEffect, DragEvent, useCallback } from "react";
 
 type Guest = {
   id: string;
@@ -23,6 +23,7 @@ type SeatingState = {
 };
 
 const STORAGE_KEY = "table-picker:v1";
+const PASSWORD_KEY = "table-picker:password";
 
 const ALL_GUESTS: Guest[] = [
   { id: "1", firstName: "Ulysis", lastName: "Chomapoy" },
@@ -115,38 +116,21 @@ const DEFAULT_TABLES: TableData[] = [
   { id: "table8", name: "Table 8", capacity: 10, guests: [] },
 ];
 
-function loadState(): SeatingState | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const saved = JSON.parse(raw) as SeatingState;
-
-    // Merge saved guest assignments with current table definitions (for capacity changes)
-    const tables = DEFAULT_TABLES.map((defaultTable) => {
-      const savedTable = saved.tables.find((t) => t.id === defaultTable.id);
-      return {
-        ...defaultTable,
-        guests: savedTable?.guests ?? [],
-      };
-    });
-
+function mergeWithDefaults(saved: SeatingState): SeatingState {
+  const tables = DEFAULT_TABLES.map((defaultTable) => {
+    const savedTable = saved.tables.find((t) => t.id === defaultTable.id);
     return {
-      tables,
-      unassigned: saved.unassigned,
-      removed: saved.removed ?? [],
-      customGuests: saved.customGuests ?? [],
+      ...defaultTable,
+      guests: savedTable?.guests ?? [],
     };
-  } catch {
-    return null;
-  }
-}
+  });
 
-function saveState(state: SeatingState) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // ignore
-  }
+  return {
+    tables,
+    unassigned: saved.unassigned,
+    removed: saved.removed ?? [],
+    customGuests: saved.customGuests ?? [],
+  };
 }
 
 let customGuestsCache: Guest[] = [];
@@ -156,6 +140,12 @@ function getGuestById(id: string): Guest | undefined {
 }
 
 export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
   const [tables, setTables] = useState<TableData[]>(DEFAULT_TABLES);
   const [unassigned, setUnassigned] = useState<string[]>(ALL_GUESTS.map((g) => g.id));
   const [removed, setRemoved] = useState<string[]>([]);
@@ -169,19 +159,113 @@ export default function Home() {
     customGuestsCache = customGuests;
   }, [customGuests]);
 
+  // Check for saved password on mount
   useEffect(() => {
-    const saved = loadState();
-    if (saved) {
-      setTables(saved.tables);
-      setUnassigned(saved.unassigned);
-      setRemoved(saved.removed);
-      setCustomGuests(saved.customGuests);
+    const savedPassword = localStorage.getItem(PASSWORD_KEY);
+    if (savedPassword) {
+      setPassword(savedPassword);
+      loadData(savedPassword);
+    } else {
+      setIsLoading(false);
     }
   }, []);
 
+  // Save to API with debounce
+  const saveToApi = useCallback(async (state: SeatingState, pwd: string) => {
+    setIsSaving(true);
+    try {
+      await fetch("/api/seating", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-app-password": pwd,
+        },
+        body: JSON.stringify(state),
+      });
+      // Also save to localStorage as cache
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.error("Failed to save:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  }, []);
+
+  // Debounced save effect
   useEffect(() => {
-    saveState({ tables, unassigned, removed, customGuests });
-  }, [tables, unassigned, removed, customGuests]);
+    if (!isAuthenticated) return;
+
+    const timeoutId = setTimeout(() => {
+      saveToApi({ tables, unassigned, removed, customGuests }, password);
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [tables, unassigned, removed, customGuests, isAuthenticated, password, saveToApi]);
+
+  async function loadData(pwd: string) {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/seating", {
+        headers: { "x-app-password": pwd },
+      });
+
+      if (response.status === 401) {
+        setPasswordError("Incorrect password");
+        setIsLoading(false);
+        localStorage.removeItem(PASSWORD_KEY);
+        return;
+      }
+
+      const { data } = await response.json();
+
+      if (data) {
+        const merged = mergeWithDefaults(data);
+        setTables(merged.tables);
+        setUnassigned(merged.unassigned);
+        setRemoved(merged.removed);
+        setCustomGuests(merged.customGuests);
+      } else {
+        // No data on server, check localStorage
+        const cached = localStorage.getItem(STORAGE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached) as SeatingState;
+          const merged = mergeWithDefaults(parsed);
+          setTables(merged.tables);
+          setUnassigned(merged.unassigned);
+          setRemoved(merged.removed);
+          setCustomGuests(merged.customGuests);
+        }
+      }
+
+      localStorage.setItem(PASSWORD_KEY, pwd);
+      setIsAuthenticated(true);
+      setPasswordError("");
+    } catch (error) {
+      console.error("Failed to load:", error);
+      // Fall back to localStorage
+      const cached = localStorage.getItem(STORAGE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as SeatingState;
+        const merged = mergeWithDefaults(parsed);
+        setTables(merged.tables);
+        setUnassigned(merged.unassigned);
+        setRemoved(merged.removed);
+        setCustomGuests(merged.customGuests);
+      }
+      setIsAuthenticated(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!password.trim()) {
+      setPasswordError("Please enter a password");
+      return;
+    }
+    loadData(password);
+  }
 
   function handleDragStart(e: DragEvent, guestId: string, source: string) {
     setDraggedGuest(guestId);
@@ -201,8 +285,9 @@ export default function Home() {
     const table = tables.find((t) => t.id === tableId);
     if (!table) return;
 
-    // Check capacity
-    if (table.guests.length >= table.capacity) return;
+    // Check capacity (bridal table is special)
+    const effectiveCapacity = tableId === "bridal" ? table.capacity - BRIDAL_PARTY.length : table.capacity;
+    if (table.guests.length >= effectiveCapacity) return;
 
     // Remove from source
     if (dragSource === "unassigned") {
@@ -296,6 +381,47 @@ export default function Home() {
     }
   }
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-neutral-900">
+        <div className="text-neutral-400">Loading...</div>
+      </main>
+    );
+  }
+
+  // Show password prompt
+  if (!isAuthenticated) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-neutral-900">
+        <form onSubmit={handleLogin} className="bg-neutral-800 p-8 rounded-xl border border-neutral-700 w-80">
+          <h1 className="text-xl font-semibold mb-2">Wedding Seating</h1>
+          <p className="text-sm text-neutral-400 mb-6">Enter password to continue</p>
+
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full px-3 py-2 bg-neutral-900 border border-neutral-600 rounded-lg focus:outline-none focus:border-neutral-500 mb-3"
+            autoFocus
+          />
+
+          {passwordError && (
+            <p className="text-red-400 text-sm mb-3">{passwordError}</p>
+          )}
+
+          <button
+            type="submit"
+            className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors font-medium"
+          >
+            Enter
+          </button>
+        </form>
+      </main>
+    );
+  }
+
   const totalGuests = ALL_GUESTS.length + customGuests.length - removed.length;
   const assignedCount = totalGuests - unassigned.length;
 
@@ -308,7 +434,12 @@ export default function Home() {
         onDrop={handleDropOnUnassigned}
       >
         <div className="p-4 border-b border-neutral-700">
-          <h1 className="text-xl font-semibold">Wedding Seating</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-semibold">Wedding Seating</h1>
+            {isSaving && (
+              <span className="text-xs text-neutral-500">Saving...</span>
+            )}
+          </div>
           <p className="text-sm text-neutral-400 mt-1">11 April</p>
           <div className="mt-3 text-sm">
             <span className="text-emerald-400">{assignedCount}</span>
