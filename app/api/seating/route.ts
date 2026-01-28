@@ -1,4 +1,4 @@
-import { put, list, del } from "@vercel/blob";
+import { put, list } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 
 const BLOB_NAME = "seating-data.json";
@@ -44,19 +44,12 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
 
-    // Delete old blobs if they exist
-    const { blobs } = await list();
-    for (const blob of blobs) {
-      if (blob.pathname === BLOB_NAME || blob.pathname.includes("seating-data")) {
-        await del(blob.url);
-      }
-    }
-
-    // Save new data (addRandomSuffix: false keeps the exact filename)
+    // Save new data (overwrite existing file)
     const blob = await put(BLOB_NAME, JSON.stringify(data), {
       access: "public",
       contentType: "application/json",
       addRandomSuffix: false,
+      allowOverwrite: true,
     });
 
     return NextResponse.json({ success: true, url: blob.url });
