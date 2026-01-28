@@ -145,6 +145,7 @@ export default function Home() {
   const [passwordError, setPasswordError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasLoadedData, setHasLoadedData] = useState(false);
 
   const [tables, setTables] = useState<TableData[]>(DEFAULT_TABLES);
   const [unassigned, setUnassigned] = useState<string[]>(ALL_GUESTS.map((g) => g.id));
@@ -191,16 +192,16 @@ export default function Home() {
     }
   }, []);
 
-  // Debounced save effect
+  // Debounced save effect - only save after initial data has loaded
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !hasLoadedData) return;
 
     const timeoutId = setTimeout(() => {
       saveToApi({ tables, unassigned, removed, customGuests }, password);
     }, 1000);
 
     return () => clearTimeout(timeoutId);
-  }, [tables, unassigned, removed, customGuests, isAuthenticated, password, saveToApi]);
+  }, [tables, unassigned, removed, customGuests, isAuthenticated, hasLoadedData, password, saveToApi]);
 
   async function loadData(pwd: string) {
     setIsLoading(true);
@@ -239,6 +240,7 @@ export default function Home() {
 
       localStorage.setItem(PASSWORD_KEY, pwd);
       setIsAuthenticated(true);
+      setHasLoadedData(true);
       setPasswordError("");
     } catch (error) {
       console.error("Failed to load:", error);
@@ -253,6 +255,7 @@ export default function Home() {
         setCustomGuests(merged.customGuests);
       }
       setIsAuthenticated(true);
+      setHasLoadedData(true);
     } finally {
       setIsLoading(false);
     }
