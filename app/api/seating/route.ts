@@ -16,15 +16,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // List blobs to find our data file
-    const { blobs } = await list({ prefix: BLOB_NAME });
+    // List all blobs and find our data file
+    const { blobs } = await list();
+    const seatingBlob = blobs.find((b) => b.pathname === BLOB_NAME || b.pathname.includes("seating-data"));
 
-    if (blobs.length === 0) {
+    if (!seatingBlob) {
       return NextResponse.json({ data: null });
     }
 
     // Fetch the blob content
-    const response = await fetch(blobs[0].url);
+    const response = await fetch(seatingBlob.url);
     const data = await response.json();
 
     return NextResponse.json({ data });
@@ -43,16 +44,19 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
 
-    // Delete old blob if it exists
-    const { blobs } = await list({ prefix: BLOB_NAME });
+    // Delete old blobs if they exist
+    const { blobs } = await list();
     for (const blob of blobs) {
-      await del(blob.url);
+      if (blob.pathname === BLOB_NAME || blob.pathname.includes("seating-data")) {
+        await del(blob.url);
+      }
     }
 
-    // Save new data
+    // Save new data (addRandomSuffix: false keeps the exact filename)
     const blob = await put(BLOB_NAME, JSON.stringify(data), {
       access: "public",
       contentType: "application/json",
+      addRandomSuffix: false,
     });
 
     return NextResponse.json({ success: true, url: blob.url });
