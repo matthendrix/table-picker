@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, DragEvent, useCallback } from "react";
+import { useState, useEffect, DragEvent, useCallback, useRef } from "react";
 
 type Guest = {
   id: string;
@@ -146,6 +146,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasLoadedData, setHasLoadedData] = useState(false);
+  const saveCountRef = useRef(0); // Track saves to skip the first one after load
 
   const [tables, setTables] = useState<TableData[]>(DEFAULT_TABLES);
   const [unassigned, setUnassigned] = useState<string[]>(ALL_GUESTS.map((g) => g.id));
@@ -192,9 +193,16 @@ export default function Home() {
     }
   }, []);
 
-  // Debounced save effect - only save after initial data has loaded
+  // Debounced save effect - only save after initial data has loaded AND user makes changes
   useEffect(() => {
     if (!isAuthenticated || !hasLoadedData) return;
+
+    // Skip the first save trigger right after loading (it's just the loaded data)
+    saveCountRef.current++;
+    if (saveCountRef.current === 1) {
+      console.log("Skipping initial save after load");
+      return;
+    }
 
     const timeoutId = setTimeout(() => {
       saveToApi({ tables, unassigned, removed, customGuests }, password);
@@ -239,6 +247,7 @@ export default function Home() {
       }
 
       localStorage.setItem(PASSWORD_KEY, pwd);
+      saveCountRef.current = 0; // Reset save counter after load
       setIsAuthenticated(true);
       setHasLoadedData(true);
       setPasswordError("");
@@ -254,6 +263,7 @@ export default function Home() {
         setRemoved(merged.removed);
         setCustomGuests(merged.customGuests);
       }
+      saveCountRef.current = 0; // Reset save counter after load
       setIsAuthenticated(true);
       setHasLoadedData(true);
     } finally {
