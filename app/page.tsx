@@ -66,6 +66,7 @@ const ALL_GUESTS: Guest[] = [
   { id: "42", firstName: "William", lastName: "Webb" },
   { id: "43", firstName: "Samuel", lastName: "Webb" },
   { id: "44", firstName: "Jessica", lastName: "Heikkinen" },
+  { id: "45", firstName: "Matt", lastName: "Heikkinen" },
   { id: "46", firstName: "Hugo", lastName: "Heikkinen" },
   { id: "48", firstName: "Shane", lastName: "Styles" },
   { id: "49", firstName: "Belinda", lastName: "Styles" },
