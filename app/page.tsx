@@ -97,8 +97,8 @@ const ALL_GUESTS: Guest[] = [
 
 // Bride and groom - always on bridal table, not draggable
 const BRIDAL_PARTY: Guest[] = [
-  { id: "bridal-matt", firstName: "Matt", lastName: "Heikkinen" },
-  { id: "bridal-rachel", firstName: "Rachel", lastName: "Yenn Xin" },
+  { id: "bridal-matt", firstName: "Matt", lastName: "Emery" },
+  { id: "bridal-rachel", firstName: "Rachel", lastName: "Chomapoy" },
 ];
 
 const DEFAULT_TABLES: TableData[] = [
