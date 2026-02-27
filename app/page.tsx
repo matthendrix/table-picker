@@ -422,8 +422,23 @@ export default function Home() {
   const totalGuests = ALL_GUESTS.length + BRIDAL_PARTY.length + customGuests.length - removed.length;
   const assignedCount = totalGuests - unassigned.length;
 
+  const sortedGuests = (ids: string[]) =>
+    ids
+      .map((id) => getGuestById(id))
+      .filter((g): g is Guest => g !== undefined)
+      .sort((a, b) => {
+        const c = a.lastName.localeCompare(b.lastName);
+        return c !== 0 ? c : a.firstName.localeCompare(b.firstName);
+      });
+
+  const bridalGuests = [
+    ...BRIDAL_PARTY,
+    ...sortedGuests(tables.find((t) => t.id === "bridal")?.guests ?? []),
+  ];
+
   return (
-    <main className="min-h-screen flex">
+    <>
+    <main className="min-h-screen flex print:hidden">
       {/* Left Panel - Guest List */}
       <div
         className="w-64 bg-neutral-900 border-r border-neutral-700 flex flex-col h-screen flex-shrink-0 sticky top-0"
@@ -553,7 +568,13 @@ export default function Home() {
           </div>
         )}
 
-        <div className="p-3 border-t border-neutral-700">
+        <div className="p-3 border-t border-neutral-700 space-y-2">
+          <button
+            onClick={() => window.print()}
+            className="w-full px-3 py-2 text-sm border border-neutral-600 text-neutral-300 rounded-lg hover:bg-neutral-700 transition-colors"
+          >
+            Print Seating Plan
+          </button>
           <button
             onClick={handleReset}
             className="w-full px-3 py-2 text-sm border border-red-800 text-red-400 rounded-lg hover:bg-red-950 transition-colors"
@@ -628,6 +649,107 @@ export default function Home() {
         </div>
       </div>
     </main>
+
+    {/* ── Print Layout ── hidden on screen, visible when printing ── */}
+    <div className="hidden print:block print-layout">
+
+      {/* Page 1: Floor Plan Diagram */}
+      <div className="print-page">
+        <div className="print-venue-title">Matt &amp; Rachel&apos;s Wedding</div>
+        <div className="print-venue-subtitle">11 April 2026 — Seating Plan</div>
+
+        {/* Stage */}
+        <div className="print-stage-wrap">
+          <div className="print-stage-semi">Stage / Dance Floor</div>
+          <div className="print-stage-rect" />
+        </div>
+
+        {/* Bridal table floated next to stage rect */}
+        <div className="print-floor-top">
+          <div style={{ width: 160 }} />
+          <div className="print-table-box bridal">
+            <div className="print-table-header">Bridal Table</div>
+            <ul>
+              {bridalGuests.map((g) => (
+                <li key={g.id}>{g.lastName}, {g.firstName}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Tables 1–4 left, 5–8 right */}
+        <div className="print-tables-row">
+          <div className="print-column">
+            {["table1","table2","table3","table4"].map((id) => {
+              const table = tables.find((t) => t.id === id)!;
+              const guests = sortedGuests(table.guests);
+              return (
+                <div key={id} className="print-table-box">
+                  <div className="print-table-header">{table.name} ({table.guests.length}/10)</div>
+                  <ul>
+                    {guests.length === 0
+                      ? <li className="empty">Empty</li>
+                      : guests.map((g) => <li key={g.id}>{g.lastName}, {g.firstName}</li>)}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+          <div className="print-column">
+            {["table5","table6","table7","table8"].map((id) => {
+              const table = tables.find((t) => t.id === id)!;
+              const guests = sortedGuests(table.guests);
+              return (
+                <div key={id} className="print-table-box">
+                  <div className="print-table-header">{table.name} ({table.guests.length}/10)</div>
+                  <ul>
+                    {guests.length === 0
+                      ? <li className="empty">Empty</li>
+                      : guests.map((g) => <li key={g.id}>{g.lastName}, {g.firstName}</li>)}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Page 2: Table List */}
+      <div className="print-page print-page-break">
+        <div className="print-list-title">Matt &amp; Rachel&apos;s Wedding</div>
+        <div className="print-list-subtitle">11 April 2026 — Guest List by Table</div>
+
+        <div className="print-list-grid">
+          {/* Bridal table first */}
+          <div className="print-list-section">
+            <div className="print-list-header">Bridal Table</div>
+            <ol>
+              {bridalGuests.map((g) => (
+                <li key={g.id}>{g.lastName}, {g.firstName}</li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Tables 1–8 */}
+          {["table1","table2","table3","table4","table5","table6","table7","table8"].map((id) => {
+            const table = tables.find((t) => t.id === id)!;
+            const guests = sortedGuests(table.guests);
+            return (
+              <div key={id} className="print-list-section">
+                <div className="print-list-header">{table.name}</div>
+                <ol>
+                  {guests.length === 0
+                    ? <li className="empty">No guests assigned</li>
+                    : guests.map((g) => <li key={g.id}>{g.lastName}, {g.firstName}</li>)}
+                </ol>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+    </div>
+    </>
   );
 }
 

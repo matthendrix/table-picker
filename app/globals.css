@@ -5,3 +5,164 @@ body {
   color: #ededed;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .print-page {
+    padding: 12mm 14mm;
+  }
+
+  .print-page-break {
+    page-break-before: always;
+  }
+
+  /* --- Floor Plan --- */
+  .print-venue-title {
+    font-size: 16pt;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 2pt;
+  }
+
+  .print-venue-subtitle {
+    font-size: 10pt;
+    text-align: center;
+    color: #555;
+    margin-bottom: 14pt;
+  }
+
+  .print-stage-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 4pt;
+  }
+
+  .print-stage-semi {
+    width: 160px;
+    height: 36px;
+    border: 1.5px solid #aaa;
+    border-bottom: none;
+    border-radius: 80px 80px 0 0;
+    background: #e8e8e8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7pt;
+    color: #555;
+  }
+
+  .print-stage-rect {
+    width: 160px;
+    height: 18px;
+    border: 1.5px solid #aaa;
+    background: #e0e0e0;
+  }
+
+  .print-floor-top {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 20pt;
+    margin-bottom: 12pt;
+  }
+
+  .print-tables-row {
+    display: flex;
+    justify-content: center;
+    gap: 24pt;
+  }
+
+  .print-column {
+    display: flex;
+    flex-direction: column;
+    gap: 6pt;
+  }
+
+  .print-table-box {
+    border: 1.5px solid #333;
+    border-radius: 6px;
+    width: 185px;
+    page-break-inside: avoid;
+  }
+
+  .print-table-box.bridal {
+    border-color: #2d6a4f;
+  }
+
+  .print-table-header {
+    background: #333;
+    color: white;
+    font-size: 8pt;
+    font-weight: bold;
+    padding: 3pt 6pt;
+    border-radius: 4px 4px 0 0;
+  }
+
+  .print-table-box.bridal .print-table-header {
+    background: #2d6a4f;
+  }
+
+  .print-table-box ul {
+    list-style: none;
+    padding: 3pt 6pt 4pt;
+    margin: 0;
+    font-size: 7.5pt;
+    line-height: 1.45;
+  }
+
+  .print-table-box ul li.empty {
+    color: #aaa;
+    font-style: italic;
+  }
+
+  /* --- Table List --- */
+  .print-list-title {
+    font-size: 16pt;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 2pt;
+  }
+
+  .print-list-subtitle {
+    font-size: 10pt;
+    text-align: center;
+    color: #555;
+    margin-bottom: 14pt;
+  }
+
+  .print-list-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10pt 16pt;
+  }
+
+  .print-list-section {
+    page-break-inside: avoid;
+  }
+
+  .print-list-header {
+    font-size: 10pt;
+    font-weight: bold;
+    border-bottom: 1.5px solid #333;
+    padding-bottom: 2pt;
+    margin-bottom: 3pt;
+  }
+
+  .print-list-section ol {
+    padding-left: 14pt;
+    margin: 0;
+    font-size: 8.5pt;
+    line-height: 1.5;
+  }
+
+  .print-list-section ol li.empty {
+    color: #aaa;
+    font-style: italic;
+    list-style: none;
+  }
+}
