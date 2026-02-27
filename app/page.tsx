@@ -757,7 +757,9 @@ export default function Home() {
             <div className="print-table-header">Bridal Table</div>
             <ul>
               {bridalGuests.map((g) => (
-                <li key={g.id}>{g.lastName}, {g.firstName}</li>
+                <li key={g.id}>
+                  {g.id.startsWith("bridal-") ? g.firstName : `${g.lastName}, ${g.firstName}`}
+                </li>
               ))}
             </ul>
           </div>
@@ -811,7 +813,9 @@ export default function Home() {
             <div className="print-list-header">Bridal Table</div>
             <ol>
               {bridalGuests.map((g) => (
-                <li key={g.id}>{g.lastName}, {g.firstName}</li>
+                <li key={g.id}>
+                  {g.id.startsWith("bridal-") ? g.firstName : `${g.lastName}, ${g.firstName}`}
+                </li>
               ))}
             </ol>
           </div>
