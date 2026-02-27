@@ -149,6 +149,8 @@ export default function Home() {
   const [draggedGuest, setDraggedGuest] = useState<string | null>(null);
   const [dragSource, setDragSource] = useState<string | null>(null);
   const [newGuestName, setNewGuestName] = useState("");
+  const [previousState, setPreviousState] = useState<SeatingState | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const getGuestById = useCallback(
     (id: string) => ALL_GUESTS.find((g) => g.id === id) ?? customGuests.find((g) => g.id === id),
@@ -264,6 +266,19 @@ export default function Home() {
     loadData(password);
   }
 
+  function saveUndo() {
+    setPreviousState({ tables, unassigned, removed, customGuests });
+  }
+
+  function handleUndo() {
+    if (!previousState) return;
+    setTables(previousState.tables);
+    setUnassigned(previousState.unassigned);
+    setRemoved(previousState.removed);
+    setCustomGuests(previousState.customGuests);
+    setPreviousState(null);
+  }
+
   function handleDragStart(e: DragEvent, guestId: string, source: string) {
     setDraggedGuest(guestId);
     setDragSource(source);
@@ -285,6 +300,8 @@ export default function Home() {
     // Check capacity (bridal table is special)
     const effectiveCapacity = tableId === "bridal" ? table.capacity - BRIDAL_PARTY.length : table.capacity;
     if (table.guests.length >= effectiveCapacity) return;
+
+    saveUndo();
 
     // Remove from source
     if (dragSource === "unassigned") {
@@ -314,6 +331,8 @@ export default function Home() {
     e.preventDefault();
     if (!draggedGuest || dragSource === "unassigned") return;
 
+    saveUndo();
+
     // Remove from source table
     if (dragSource) {
       setTables((prev) =>
@@ -336,6 +355,8 @@ export default function Home() {
     const table = tables.find((t) => t.id === tableId);
     if (!table || table.guests.length === 0) return;
 
+    saveUndo();
+
     // Move all guests back to unassigned
     setUnassigned((prev) => [...prev, ...table.guests]);
     setTables((prev) =>
@@ -346,6 +367,8 @@ export default function Home() {
   function handleAddGuest() {
     const name = newGuestName.trim();
     if (!name) return;
+
+    saveUndo();
 
     const parts = name.split(" ");
     const firstName = parts[0];
@@ -359,13 +382,13 @@ export default function Home() {
   }
 
   function handleRemoveGuest(guestId: string) {
-    // Remove from unassigned and add to removed
+    saveUndo();
     setUnassigned((prev) => prev.filter((id) => id !== guestId));
     setRemoved((prev) => [...prev, guestId]);
   }
 
   function handleRestoreGuest(guestId: string) {
-    // Remove from removed and add back to unassigned
+    saveUndo();
     setRemoved((prev) => prev.filter((id) => id !== guestId));
     setUnassigned((prev) => [...prev, guestId]);
   }
@@ -431,6 +454,33 @@ export default function Home() {
         return c !== 0 ? c : a.firstName.localeCompare(b.firstName);
       });
 
+  const searchResults: { guest: Guest; location: string }[] | null = searchQuery.trim()
+    ? (() => {
+        const q = searchQuery.trim().toLowerCase();
+        const results: { guest: Guest; location: string }[] = [];
+        for (const g of BRIDAL_PARTY) {
+          if (`${g.lastName}, ${g.firstName}`.toLowerCase().includes(q))
+            results.push({ guest: g, location: "Bridal Table" });
+        }
+        for (const table of tables) {
+          for (const gid of table.guests) {
+            const g = getGuestById(gid);
+            if (g && `${g.lastName}, ${g.firstName}`.toLowerCase().includes(q))
+              results.push({ guest: g, location: table.name });
+          }
+        }
+        for (const gid of unassigned) {
+          const g = getGuestById(gid);
+          if (g && `${g.lastName}, ${g.firstName}`.toLowerCase().includes(q))
+            results.push({ guest: g, location: "Unassigned" });
+        }
+        return results.sort((a, b) => {
+          const c = a.guest.lastName.localeCompare(b.guest.lastName);
+          return c !== 0 ? c : a.guest.firstName.localeCompare(b.guest.firstName);
+        });
+      })()
+    : null;
+
   const bridalGuests = [
     ...BRIDAL_PARTY,
     ...sortedGuests(tables.find((t) => t.id === "bridal")?.guests ?? []),
@@ -481,14 +531,35 @@ export default function Home() {
         </div>
 
         <div className="p-3 border-b border-neutral-700">
-          <h2 className="text-sm font-medium text-neutral-400 mb-1">
-            Unassigned ({unassigned.length})
-          </h2>
-          <p className="text-xs text-neutral-500">Drag guests to a table</p>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-medium text-neutral-400">
+              Unassigned ({unassigned.length})
+            </h2>
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search guests..."
+            className="w-full px-2 py-1.5 text-sm bg-neutral-800 border border-neutral-600 rounded-lg focus:outline-none focus:border-neutral-500"
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto p-2">
-          {unassigned.length === 0 ? (
+          {searchResults !== null ? (
+            searchResults.length === 0 ? (
+              <p className="text-sm text-neutral-600 text-center py-4">No matches</p>
+            ) : (
+              <ul className="space-y-1">
+                {searchResults.map(({ guest, location }) => (
+                  <li key={guest.id} className="px-3 py-2 bg-neutral-800 rounded-lg text-sm">
+                    <div>{guest.lastName}, {guest.firstName}</div>
+                    <div className="text-xs text-neutral-500 mt-0.5">{location}</div>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : unassigned.length === 0 ? (
             <p className="text-sm text-neutral-600 text-center py-4">
               All guests seated!
             </p>
@@ -569,6 +640,14 @@ export default function Home() {
         )}
 
         <div className="p-3 border-t border-neutral-700 space-y-2">
+          {previousState && (
+            <button
+              onClick={handleUndo}
+              className="w-full px-3 py-2 text-sm border border-amber-700 text-amber-400 rounded-lg hover:bg-amber-950 transition-colors"
+            >
+              Undo
+            </button>
+          )}
           <button
             onClick={() => window.print()}
             className="w-full px-3 py-2 text-sm border border-neutral-600 text-neutral-300 rounded-lg hover:bg-neutral-700 transition-colors"
@@ -746,6 +825,21 @@ export default function Home() {
             );
           })}
         </div>
+
+        {unassigned.length > 0 && (
+          <div style={{ marginTop: 16, borderTop: "1.5px solid #ccc", paddingTop: 12 }}>
+            <div className="print-list-header" style={{ color: "#888", borderColor: "#bbb" }}>
+              Unassigned ({unassigned.length})
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "2pt 24pt", marginTop: 4 }}>
+              {sortedGuests(unassigned).map((g) => (
+                <span key={g.id} style={{ fontSize: "8.5pt", color: "#666" }}>
+                  {g.lastName}, {g.firstName}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
     </div>
