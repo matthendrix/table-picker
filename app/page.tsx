@@ -426,7 +426,7 @@ export default function Home() {
     <main className="min-h-screen flex">
       {/* Left Panel - Guest List */}
       <div
-        className="w-64 bg-neutral-900 border-r border-neutral-700 flex flex-col h-screen flex-shrink-0"
+        className="w-64 bg-neutral-900 border-r border-neutral-700 flex flex-col h-screen flex-shrink-0 sticky top-0"
         onDragOver={handleDragOver}
         onDrop={handleDropOnUnassigned}
       >
