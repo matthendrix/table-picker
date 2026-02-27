@@ -238,14 +238,24 @@ export default function Home() {
           ...ALL_GUESTS.map((g) => g.id),
           ...merged.customGuests.map((g) => g.id),
         ]);
-        setTables(
-          merged.tables.map((t) => ({
-            ...t,
-            guests: t.guests.filter((id) => knownIds.has(id)),
-          }))
-        );
-        setUnassigned(merged.unassigned.filter((id) => knownIds.has(id)));
-        setRemoved(merged.removed.filter((id) => knownIds.has(id)));
+        const filteredTables = merged.tables.map((t) => ({
+          ...t,
+          guests: t.guests.filter((id) => knownIds.has(id)),
+        }));
+        const filteredUnassigned = merged.unassigned.filter((id) => knownIds.has(id));
+        const filteredRemoved = merged.removed.filter((id) => knownIds.has(id));
+
+        // Add any ALL_GUESTS ids not yet tracked anywhere (e.g. newly added guests)
+        const accountedFor = new Set([
+          ...filteredTables.flatMap((t) => t.guests),
+          ...filteredUnassigned,
+          ...filteredRemoved,
+        ]);
+        const newGuests = ALL_GUESTS.map((g) => g.id).filter((id) => !accountedFor.has(id));
+
+        setTables(filteredTables);
+        setUnassigned([...filteredUnassigned, ...newGuests]);
+        setRemoved(filteredRemoved);
         setCustomGuests(merged.customGuests);
       }
 
