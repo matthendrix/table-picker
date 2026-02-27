@@ -157,10 +157,16 @@ export default function Home() {
     [customGuests]
   );
 
-  // No localStorage usage; require login each session
+  // Auto-login from session storage if password was saved this session
   useEffect(() => {
-    setIsLoading(false);
-  }, []);
+    const saved = sessionStorage.getItem("wedding-pwd");
+    if (saved) {
+      setPassword(saved);
+      loadData(saved);
+    } else {
+      setIsLoading(false);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save to API with debounce
   const saveToApi = useCallback(async (state: SeatingState, pwd: string) => {
@@ -246,6 +252,7 @@ export default function Home() {
       setIsAuthenticated(true);
       setSaveError(null);
       setPasswordError("");
+      sessionStorage.setItem("wedding-pwd", pwd);
     } catch (error) {
       console.error("Failed to load:", error);
       hasLoadedRef.current = false;
